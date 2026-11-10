@@ -16,13 +16,18 @@ async def calculate_monthly_revenue(property_id: str, month: int, year: int, db_
     print(f"DEBUG: Querying revenue for {property_id} from {start_date} to {end_date}")
 
     # SQL Simulation (This would be executed against the actual DB)
+    # start_date/end_date are naive local dates. "AT TIME ZONE p.timezone" interprets
+    # them in the property's own timezone (e.g. Europe/Paris), so a check-in at
+    # 2024-02-29 23:30 UTC (= 2024-03-01 00:30 Paris) is correctly counted in March.
     query = """
-        SELECT SUM(total_amount) as total
-        FROM reservations
-        WHERE property_id = $1
-        AND tenant_id = $2
-        AND check_in_date >= $3
-        AND check_in_date < $4
+        SELECT SUM(r.total_amount) as total
+        FROM reservations r
+        JOIN properties p
+          ON p.id = r.property_id AND p.tenant_id = r.tenant_id
+        WHERE r.property_id = $1
+        AND r.tenant_id = $2
+        AND r.check_in_date >= ($3::timestamp AT TIME ZONE p.timezone)
+        AND r.check_in_date <  ($4::timestamp AT TIME ZONE p.timezone)
     """
     
     # In production this query executes against a database session.
